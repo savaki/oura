@@ -53,6 +53,10 @@ murmur3 = { version = "0.5.1", optional = true }
 # required for CI to complete successfully
 openssl = { version = "0.10", optional = true, features = ["vendored"] }
 
+[dev-dependencies]
+cardano_ouroboros_network = { path = "../rust-cardano-ouroboros-network" }
+tokio = { version = "1.15.0", features = ["full"]}
+
 [features]
 default = []
 logs = ["file-rotate"]
