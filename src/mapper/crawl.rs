@@ -3,12 +3,14 @@ use pallas::ledger::alonzo::{
     TransactionBodyComponent, TransactionInput, TransactionOutput, Value,
 };
 
+use pallas::crypto::hash::Hash;
+
 use crate::{
     model::{EventContext, EventData, MetadataRecord, MetadatumRendition},
     Error,
 };
 
-use super::EventWriter;
+use super::{map::ToHex, EventWriter};
 
 impl EventWriter {
     fn crawl_metadata(&self, metadata: &Metadata) -> Result<(), Error> {
@@ -148,9 +150,10 @@ impl EventWriter {
     fn crawl_transaction(
         &self,
         tx: &TransactionBody,
+        tx_hash: &str,
         aux_data: Option<&AuxiliaryData>,
     ) -> Result<(), Error> {
-        let record = self.to_transaction_record(tx, aux_data)?;
+        let record = self.to_transaction_record(tx, tx_hash, aux_data)?;
 
         self.append_from(record.clone())?;
 
@@ -211,7 +214,7 @@ impl EventWriter {
         Ok(())
     }
 
-    fn crawl_block(&self, block: &Block, hash: &[u8]) -> Result<(), Error> {
+    fn crawl_block(&self, block: &Block, hash: &Hash<32>) -> Result<(), Error> {
         let record = self.to_block_record(block, hash)?;
 
         self.append(EventData::Block(record.clone()))?;
@@ -223,21 +226,15 @@ impl EventWriter {
                 .find(|(k, _)| *k == (idx as u32))
                 .map(|(_, v)| v);
 
-            let tx_hash = match crypto::hash_transaction(tx) {
-                Ok(h) => Some(hex::encode(h)),
-                Err(err) => {
-                    log::warn!("error hashing transaction: {:?}", err);
-                    None
-                }
-            };
+            let tx_hash = crypto::hash_transaction(tx).to_hex();
 
             let child = self.child_writer(EventContext {
                 tx_idx: Some(idx),
-                tx_hash: tx_hash.clone(),
+                tx_hash: Some(tx_hash.to_owned()),
                 ..EventContext::default()
             });
 
-            child.crawl_transaction(tx, aux_data)?;
+            child.crawl_transaction(tx, &tx_hash, aux_data)?;
         }
 
         if self.config.include_block_end_events {
@@ -248,7 +245,7 @@ impl EventWriter {
     }
 
     pub fn crawl(&self, block: &Block) -> Result<(), Error> {
-        let hash = crypto::hash_block_header(&block.header)?;
+        let hash = crypto::hash_block_header(&block.header);
 
         let child = self.child_writer(EventContext {
             block_hash: Some(hex::encode(&hash)),

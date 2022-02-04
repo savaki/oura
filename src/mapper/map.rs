@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use minicbor::bytes::ByteVec;
+use pallas::crypto::hash::Hash;
 use pallas::ledger::alonzo::{
     self as alonzo, AuxiliaryData, Block, Certificate, InstantaneousRewardSource,
     InstantaneousRewardTarget, Metadatum, Relay, TransactionInput, TransactionOutput, Value,
@@ -23,6 +24,12 @@ pub trait ToHex {
 }
 
 impl ToHex for Vec<u8> {
+    fn to_hex(&self) -> String {
+        hex::encode(self)
+    }
+}
+
+impl<const BYTES: usize> ToHex for Hash<BYTES> {
     fn to_hex(&self) -> String {
         hex::encode(self)
     }
@@ -254,9 +261,12 @@ impl EventWriter {
     pub fn to_transaction_record(
         &self,
         body: &TransactionBody,
+        tx_hash: &str,
         aux_data: Option<&AuxiliaryData>,
     ) -> Result<TransactionRecord, Error> {
         let mut record = TransactionRecord::default();
+
+        record.hash.push_str(tx_hash);
 
         for component in body.iter() {
             match component {
@@ -338,7 +348,7 @@ impl EventWriter {
         Ok(record)
     }
 
-    pub fn to_block_record(&self, source: &Block, hash: &[u8]) -> Result<BlockRecord, Error> {
+    pub fn to_block_record(&self, source: &Block, hash: &Hash<32>) -> Result<BlockRecord, Error> {
         Ok(BlockRecord {
             body_size: source.header.header_body.block_body_size as usize,
             issuer_vkey: source.header.header_body.issuer_vkey.to_hex(),
@@ -346,6 +356,7 @@ impl EventWriter {
             hash: hex::encode(hash),
             number: source.header.header_body.block_number,
             slot: source.header.header_body.slot,
+            previous_hash: hex::encode(source.header.header_body.prev_hash),
         })
     }
 }
